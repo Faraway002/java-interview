@@ -61,7 +61,7 @@ SpringMVC 可以理解为对 Servlet 的封装，屏蔽掉 Servlet 很多的细�
 
 整体流程：
 
-![image-20220425123732105](https://cdn.jsdelivr.net/gh/Faraway002/typora/images/image-20220425123732105.png)
+![image-20220425123732105](https://fastly.jsdelivr.net/gh/Faraway002/typora/images/image-20220425123732105.png)
 
 ## Spring IoC AOP？
 
@@ -97,17 +97,17 @@ Spring 内部有一个 `ApplicationContext`，意思是应用程序上下文，�
 
 #### Bean 的生命周期
 
-![img](https://cdn.jsdelivr.net/gh/Faraway002/typora/images/abde7edc90734009864eee7e12aa986d~tplv-k3u1fbpfcp-zoom-in-crop-mark:1304:0:0:0.awebp)
+![img](https://fastly.jsdelivr.net/gh/Faraway002/typora/images/abde7edc90734009864eee7e12aa986d~tplv-k3u1fbpfcp-zoom-in-crop-mark:1304:0:0:0.awebp)
 
 1. 首先，通过 `BeanDefinitionReader` 读取指定的配置文件生成 bean 的定义信息，然后到完整的 bean 定义信息( `BeanDefinition` 对象)，注意这里只是存储 bean 的定义信息，还没有实例化 bean 对象；
 2. 在 `BeanDefinition` 和 完整 `BeanDefinition` 中间通过一个后置增强器，可以对bean的定义信息进行统一修改，只需要实现 `BeanFactoryPostProcessor` 接口即可，这个后置增强器是可以有多个的，你只要在不同的类实现多个 `BeanFactoryPostProcessor` 接口就会执行多次
 3. 得到完整 `BeanDefinition` 之后就可以进行创建对象了，这整个过程被称为 bean 的生命周期，也就是从实例化到销毁的过程
 
-![image.png](https://cdn.jsdelivr.net/gh/Faraway002/typora/images/b99901f4ba6f45159c32946d3fb31536~tplv-k3u1fbpfcp-zoom-in-crop-mark:1304:0:0:0.awebp)
+![image.png](https://fastly.jsdelivr.net/gh/Faraway002/typora/images/b99901f4ba6f45159c32946d3fb31536~tplv-k3u1fbpfcp-zoom-in-crop-mark:1304:0:0:0.awebp)
 
 这场图是简化版本的，但其实，它的内部蕴含了很多东西，让我们看看细化后的流程图：
 
-![](https://cdn.jsdelivr.net/gh/Faraway002/typora/images/72677c123f5e41b3b8498654acac8fe0~tplv-k3u1fbpfcp-zoom-in-crop-mark:1304:0:0:0.awebp)
+![](https://fastly.jsdelivr.net/gh/Faraway002/typora/images/72677c123f5e41b3b8498654acac8fe0~tplv-k3u1fbpfcp-zoom-in-crop-mark:1304:0:0:0.awebp)
 
 ### 循环依赖怎么解决的？
 
@@ -120,7 +120,7 @@ Spring 内部有一个 `ApplicationContext`，意思是应用程序上下文，�
 
 三个Map，singletonObjects（一级，日常实际获取Bean的地方），earlySingletonObjects（二级，还没进行属性注入，由三级缓存放进来），singletonFactories（三级，Value是一个对象工厂）
 
-![image-20220425162422576](https://cdn.jsdelivr.net/gh/Faraway002/typora/images/image-20220425162422576.png)
+![image-20220425162422576](https://fastly.jsdelivr.net/gh/Faraway002/typora/images/image-20220425162422576.png)
 
 * A对象实例化之后，属性注入之前，其实会把A对象放入三级缓存中
 * 等到A对象属性注入时，发现依赖B，又去实例化B时，B属性注入需要去获取A对象，这里就是从三级缓存里拿出ObjectFactory，从ObjectFactory得到对应的Bean（就是对象A），然后把 A 从三级缓存放到二级缓存中
