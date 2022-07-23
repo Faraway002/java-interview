@@ -1,3 +1,5 @@
+[TOC]
+
 # Spring 面试
 
 ## SpringMVC 的理解？
@@ -111,26 +113,143 @@ Spring 内部有一个 `ApplicationContext`，意思是应用程序上下文，�
 
 ### 循环依赖怎么解决的？
 
-* 首先A对象实例化，然后对属性进行注入，发现依赖B对象
-* B对象此时还没创建出来，所以转头去实例化B对象
-* B对象实例化之后，发现需要依赖A对象，那A对象已经实例化了嘛，所以B对象最终能完成创建
-* B对象返回到A对象的属性注入的方法上，A对象最终完成创建
+* 首先 A 对象实例化，然后对属性进行注入，发现依赖 B 对象
+* B 对象此时还没创建出来，所以转头去实例化 B 对象
+* B 对象实例化之后，发现需要依赖 A 对象，那 A 对象已经实例化了嘛，所以 B 对象最终能完成创建
+* B 对象返回到 A 对象的属性注入的方法上，A 对象最终完成创建
 
 三级缓存：
 
-三个Map，singletonObjects（一级，日常实际获取Bean的地方），earlySingletonObjects（二级，还没进行属性注入，由三级缓存放进来），singletonFactories（三级，Value是一个对象工厂）
+三个Map，singletonObjects（一级，日常实际获取Bean的地方），earlySingletonObjects（二级，还没进行属性注入，由三级缓存放进来），singletonFactories（三级，value 是一个对象工厂）
 
 ![image-20220425162422576](https://fastly.jsdelivr.net/gh/Faraway002/typora/images/image-20220425162422576.png)
 
-* A对象实例化之后，属性注入之前，其实会把A对象放入三级缓存中
-* 等到A对象属性注入时，发现依赖B，又去实例化B时，B属性注入需要去获取A对象，这里就是从三级缓存里拿出ObjectFactory，从ObjectFactory得到对应的Bean（就是对象A），然后把 A 从三级缓存放到二级缓存中
-* 等到完全初始化之后，就会把二级缓存给remove掉，塞到一级缓存中
-* 我们自己去getBean的时候，实际上拿到的是一级缓存的
+* A 对象实例化之后，属性注入之前，其实会把 A 对象放入三级缓存中
+* 等到 A 对象属性注入时，发现依赖 B，又去实例化 B 时，B 属性注入需要去获取 A 对象，这里就是从三级缓存里拿出 ObjectFactory，从ObjectFactor y得到对应的 Bean（就是对象 A），然后把 A 从三级缓存放到二级缓存中
+* 等到完全初始化之后，就会把二级缓存给 remove 掉，塞到一级缓存中
+* 我们自己去 getBean 的时候，实际上拿到的是一级缓存的
 
 ## SpringBoot 自动配置原理？
 
-主要是 Spring Boot 的启动类上的核心注解 SpringBootApplication 注解主配置类，有了这个主配置类启动时就会为 SpringBoot 开启一个 `@EnableAutoConfiguration` 注解自动配置功能。
+### 加载自动配置类
 
-`@EnableAutoConfiguration` 有一个 `@Import`，导入了 `AutoConfigurationImportSelector` 类，它的 `getCandidateConfigurations` 获取配置类，
+主要是 Spring Boot 的启动类上的核心注解 `@SpringBootApplication` 注解主配置类，它可以被视作：
 
-## SpringBoot Starter？
+* `@EnableAutoConfiguration` 启用 SpringBoot 的自动配置机制。
+* `@ComponentScan`：扫描被 `@Component`、`@Service`、`@Controller`、`@Repository` 注解的类。
+* `@Configuration`：允许上下文注册额外的 bean 或导入其他配置类。
+
+重点是 `@EnableAutoConfiguration`：
+
+```java
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Inherited
+@AutoConfigurationPackage
+@Import({AutoConfigurationImportSelector.class})
+public @interface EnableAutoConfiguration {
+    String ENABLED_OVERRIDE_PROPERTY = "spring.boot.enableautoconfiguration";
+
+    Class<?>[] exclude() default {};
+
+    String[] excludeName() default {};
+}
+```
+
+这里通过 `@Import` 注解导入了 `AutoConfigurationImportSelector` 类，该类本质上是一个 `ImportSelector`，它有一个方法 `selectImports`，返回一个 `String[]`，Spring 会把这个数组里的所有类名加载到容器中，使得 Spring 可以动态从其他地方加载 Bean。
+
+这个实现类中的 `selectImports` 会去调用 `getAutoConfigurationEntry`，而这个方法又调用 `getCandidateConfigurations` 方法，这个方法会把所有自动配置类的信息以 `List` 的形式返回：
+
+```java
+protected List<String> getCandidateConfigurations(AnnotationMetadata metadata, AnnotationAttributes attributes) {
+    List<String> configurations = SpringFactoriesLoader.loadFactoryNames(getSpringFactoriesLoaderFactoryClass(),
+                                                                         getBeanClassLoader());
+    Assert.notEmpty(configurations, "No auto configuration classes found in META-INF/spring.factories. If you are using a custom packaging, make sure that file is correct.");
+    return configurations;
+}
+```
+
+所以，一切都是从这个方法开始的，那么它又是从哪里加载的呢？我们看一下 `loadFactoryNames()`：
+
+```java
+public static List<String> loadFactoryNames(Class<?> factoryType, @Nullable ClassLoader classLoader) {
+    ClassLoader classLoaderToUse = classLoader;
+    if (classLoaderToUse == null) {
+        classLoaderToUse = SpringFactoriesLoader.class.getClassLoader();
+    }
+    String factoryTypeName = factoryType.getName();
+    return loadSpringFactories(classLoaderToUse).getOrDefault(factoryTypeName, Collections.emptyList());
+}
+```
+
+这个类好像没有做什么实际的事，实际上是调用了 `loadSpringFactories`，继续深入：
+
+```java
+private static Map<String, List<String>> loadSpringFactories(ClassLoader classLoader) {
+    // 缓存机制
+    Map<String, List<String>> result = cache.get(classLoader);
+    if (result != null) {
+        return result;
+    }
+
+    result = new HashMap<>();
+    try {
+        // 重点
+        Enumeration<URL> urls = classLoader.getResources(FACTORIES_RESOURCE_LOCATION);
+        while (urls.hasMoreElements()) {
+            URL url = urls.nextElement();
+            UrlResource resource = new UrlResource(url);
+            Properties properties = PropertiesLoaderUtils.loadProperties(resource);
+            for (Map.Entry<?, ?> entry : properties.entrySet()) {
+                String factoryTypeName = ((String) entry.getKey()).trim();
+                String[] factoryImplementationNames =
+                    StringUtils.commaDelimitedListToStringArray((String) entry.getValue());
+                for (String factoryImplementationName : factoryImplementationNames) {
+                    result.computeIfAbsent(factoryTypeName, key -> new ArrayList<>())
+                        .add(factoryImplementationName.trim());
+                }
+            }
+        }
+        // Replace all lists with unmodifiable lists containing unique elements
+        result.replaceAll((factoryType, implementations) -> implementations.stream().distinct()
+                          .collect(Collectors.collectingAndThen(Collectors.toList(), Collections::unmodifiableList)));
+        cache.put(classLoader, result);
+    } catch (IOException ex) {
+        throw new IllegalArgumentException("Unable to load factories from location [" +
+                                           FACTORIES_RESOURCE_LOCATION + "]", ex);
+    }
+    return result;
+}
+```
+
+我们发现，一切都是从 `classLoader.getResources(FACTORIES_RESOURCE_LOCATION)` 这里开始的，这个路径是什么？我们看一下：
+
+![image-20220720082849281](https://cdn.jsdelivr.net/gh/Faraway002/typora/images/image-20220720082849281.png)
+
+原来如此，一切都在这个目录下，随便找一个和 SpringBoot 整合的包，我们看一下：
+
+![image-20220720083121338](https://cdn.jsdelivr.net/gh/Faraway002/typora/images/image-20220720083121338.png)
+
+就是这个文件，看一下里面的内容：
+
+![image-20220720083146402](https://cdn.jsdelivr.net/gh/Faraway002/typora/images/image-20220720083146402.png)
+
+是类名，我们点一个进去看看：
+
+![image-20220720083208916](https://cdn.jsdelivr.net/gh/Faraway002/typora/images/image-20220720083208916.png)
+
+这就是 MyBatis 的自动配置类，这下就串起来了。
+
+### 条件装配
+
+有了上面讲述的这一机制能够加载自动配置类，那么是否就万事大吉了呢？其实不是，SpringBoot 的自动装配不可能把所有的配置类都加载进去，原因有两个：
+
+1. 依赖包可能不全。比如你想使用 MyBatis，但是你忘记创建一个数据源了，这时候把 MyBatis 进行自动装配的话会导致出现问题。
+2. 环境。SpringBoot 针对不同的开发环境可以制定不同的配置文件，如果环境不同，可能导致使用到的包也不同。比如开发环境下你可能只想用内存数据库 H2，但是生产环境下你想换成 MySQL，这时就完全没有必要加载 H2 相关的配置。
+
+因此，SpringBoot 推出了条件装配机制，利用条件装配注解，当一个自动配置类的条件装配注解不能全部满足时，就不装配。
+
+比如上面的 MyBatis 自动配置类，注意这一行 `@ConditionalOnClass({ SqlSessionFactory.class, SqlSessionFactoryBean.class })`，它要求你的类路径里有 `SqlSessionFactory` 以及 `SqlSessionFactoryBean`，也就是 MyBatis 基本包和 MyBatis-Spring 的整合包，如果你没有这两个类，说明你都没导入 MyBatis，更别提自动装配了。
+
+## SpringBoot 自定义 Starter
